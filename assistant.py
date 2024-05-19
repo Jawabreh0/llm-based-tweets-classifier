@@ -30,12 +30,13 @@ def add_message_to_thread(client, thread_id, tweet):
         content=tweet
     )
 
+class EventHandler(AssistantEventHandler):
+    def on_text_created(self, text):
+        # Prints only the value from the text object
+        print(text.value)
+
 def classify_tweet(client, assistant_id, thread_id):
     """Stream the classification result using the Assistant."""
-    class EventHandler(AssistantEventHandler):
-        def on_text_created(self, text):
-            print(f"\nAssistant > {text}")
-
     with client.beta.threads.runs.stream(
         thread_id=thread_id,
         assistant_id=assistant_id,

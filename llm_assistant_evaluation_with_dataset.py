@@ -1,10 +1,11 @@
 import os
 import openai
 import pandas as pd
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 def setup_openai_client():
     """Setup the OpenAI client using the API key from environment variables."""
-    api_key = "put your api key here"
+    api_key = "your key here"
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set.")
     return openai.OpenAI(api_key=api_key)
@@ -53,15 +54,17 @@ def classify_tweet(client, assistant_id, thread_id):
         for message in messages:
             if message.role == 'assistant':
                 print(f"Assistant Message Content: {message.content}")  # Debug print
-                # Extract the content assuming it's a list of TextContentBlock
                 extracted_content = extract_text_from_content(message.content)
                 print(f"Extracted Content: {extracted_content}")  # Debug print
                 return extracted_content
     return "Error: Run did not complete successfully"
 
+
 def evaluate_classifier(client, assistant_id, test_data):
     """Evaluate the classifier on a set of tweets with known ground truth."""
-    correct_predictions = 0
+    y_true = []
+    y_pred = []
+
     for index, row in test_data.iterrows():
         tweet = row['tweet']
         ground_truth_label = 'normal' if row['ground_truth'] == 0 else 'harmful'  # Convert ground_truth
@@ -71,26 +74,30 @@ def evaluate_classifier(client, assistant_id, test_data):
         add_message_to_thread(client, thread.id, tweet)
         predicted = classify_tweet(client, assistant_id, thread.id)
         
-        if predicted and predicted == formatted_ground_truth:
-            correct_predictions += 1
-        print(f"Tweet: {tweet}\nPredicted: {predicted}, Ground Truth: {formatted_ground_truth}\n")
-    
-    accuracy = correct_predictions / len(test_data) * 100
-    print(f"Accuracy: {accuracy:.2f}")
+        y_true.append(formatted_ground_truth)
+        y_pred.append(predicted)
 
+        print(f"Tweet: {tweet}\nPredicted: {predicted}, Ground Truth: {formatted_ground_truth}\n")
+
+    accuracy = accuracy_score(y_true, y_pred)
+    precision = precision_score(y_true, y_pred, pos_label=f"[TextContentBlock(text=Text(annotations=[], value='harmful'), type='text')]", average='binary')
+    recall = recall_score(y_true, y_pred, pos_label=f"[TextContentBlock(text=Text(annotations=[], value='harmful'), type='text')]", average='binary')
+    f1 = f1_score(y_true, y_pred, pos_label=f"[TextContentBlock(text=Text(annotations=[], value='harmful'), type='text')]", average='binary')
+
+    print(f"Accuracy: {accuracy:.2f}")
+    print(f"Precision: {precision:.2f}")
+    print(f"Recall: {recall:.2f}")
+    print(f"F1 Score: {f1:.2f}")
 
 def main():
     client = setup_openai_client()
     assistant = create_assistant(client)
 
-    # Read the test data from CSV files
     normal_tweets_df = pd.read_csv('dataset/testing_dataset/normal_small_ds_testing.csv')
     harmful_tweets_df = pd.read_csv('dataset/testing_dataset/harmful_small_ds_testing.csv')
 
-    # Combine the data into a single DataFrame
     test_data = pd.concat([normal_tweets_df, harmful_tweets_df], ignore_index=True)
     
-    # Run evaluation
     evaluate_classifier(client, assistant.id, test_data)
 
 if __name__ == "__main__":
